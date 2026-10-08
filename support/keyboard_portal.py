@@ -23,22 +23,22 @@ class KeyboardPortal:
         self.remote_desktop_portal = dbus.Interface(
             bus.get_object("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop"),
             "org.freedesktop.portal.RemoteDesktop")
-        # D-Bus address of the approved connection; None until approval succeeds.
-        self.approved_session = None
+        # Track the session during approval too, so failures can close it.
+        self.session = None
+        self.session_closed_subscription = None
         # Keys pressed without a matching release; interruption must release them.
         self.held_keys = set()
 
     async def get_approval(self):
         """Obtain keyboard access, reusing the current session or saved approval."""
-        if self.approved_session is not None:
+        if self.session is not None:
             return
         print("Requesting keyboard access (or restoring saved approval)...", flush=True)
-        session = await self._create_session()
-        self._watch_session_closed(session)
-        await self._select_keyboard(session)
-        approval = await self._start_session(session)
+        self.session = await self._create_session()
+        self._watch_session_closed(self.session)
+        await self._select_keyboard(self.session)
+        approval = await self._start_session(self.session)
         self._save_approval(approval)
-        self.approved_session = session
         print("Keyboard access granted; waiting for the target window.", flush=True)
 
     async def _create_session(self):
@@ -50,8 +50,12 @@ class KeyboardPortal:
 
     def _watch_session_closed(self, session):
         """Report if the portal closes the connection, including during approval."""
-        self.bus.add_signal_receiver(
-            lambda *args: self.report_failure(RuntimeError("portal session closed")), signal_name="Closed",
+        def closed(*args):
+            if self.session == session:
+                self.report_failure(RuntimeError("portal session closed"))
+
+        self.session_closed_subscription = self.bus.add_signal_receiver(
+            closed, signal_name="Closed",
             dbus_interface="org.freedesktop.portal.Session", path=session)
 
     async def _select_keyboard(self, session):
@@ -77,7 +81,7 @@ class KeyboardPortal:
     def send_key(self, keysym, pressed):
         """Send one press or release. keysym is an XKB key identifier."""
         self.remote_desktop_portal.NotifyKeyboardKeysym(
-            self.approved_session, dbus.Dictionary({}, signature="sv"),
+            self.session, dbus.Dictionary({}, signature="sv"),
             dbus.Int32(keysym), dbus.UInt32(int(pressed)))
         if pressed:
             self.held_keys.add(keysym)
@@ -90,6 +94,24 @@ class KeyboardPortal:
             try:
                 self.send_key(keysym, False)
             except dbus.DBusException:
+                pass
+
+    def close(self):
+        """Release held keys and remove this paste's virtual input device."""
+        self.release_held_keys()
+        session = self.session
+        self.session = None
+        self.held_keys.clear()
+        if self.session_closed_subscription is not None:
+            self.session_closed_subscription.remove()
+            self.session_closed_subscription = None
+        if session is not None:
+            try:
+                dbus.Interface(
+                    self.bus.get_object("org.freedesktop.portal.Desktop", session),
+                    "org.freedesktop.portal.Session").Close()
+            except dbus.DBusException:
+                # The portal may have already closed the session.
                 pass
 
     async def _request_and_wait_for_response(self, method, arguments, options):

@@ -112,7 +112,8 @@ class AutoPaste(dbus.service.Object):
             await self.send_paste_keys(target_id)
         finally:
             # Focus changes, cancellation, or errors can interrupt a held modifier.
-            self.keyboard_portal.release_held_keys()
+            # Close the session so KDE stops advertising its virtual touchscreen.
+            self.keyboard_portal.close()
 
     async def wait_for_target_to_settle(self, target_id):
         """Wait until the destination stays focused for the full settling delay."""
