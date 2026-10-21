@@ -19,6 +19,7 @@ from gi.repository import GLib, GLibUnix
 
 from support.emoji_window_closer import EmojiWindowCloser
 from support.keyboard_portal import KeyboardPortal
+from support.klipper_clipboard import KlipperClipboard
 from support.kwin_scripts import KWinScripts
 
 
@@ -65,6 +66,8 @@ class AutoPaste(dbus.service.Object):
         self.shutdown_result = asyncio.get_running_loop().create_future()
         # Handles portal approval and keyboard input.
         self.keyboard_portal = KeyboardPortal(bus, self.report_failure)
+        # Confirms the selection reached the clipboard, so the old content isn't pasted.
+        self.klipper_clipboard = KlipperClipboard(bus)
         # Loads and unloads the focus watcher and temporary emoji-close script.
         self.kwin_scripts = KWinScripts(bus)
         # Closes the picker through KWin; this class still handles focus afterward.
@@ -106,6 +109,7 @@ class AutoPaste(dbus.service.Object):
                 lambda window: window and not self.is_clipboard_source(window))
             target_id = target_window["internalId"]
             await self.keyboard_portal.get_approval()
+            await self.klipper_clipboard.wait_for_newest_entry()
 
             # Approval can steal focus; return to the destination chosen above.
             await self.wait_for_target_to_settle(target_id)

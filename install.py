@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -33,6 +34,8 @@ def main():
         "import dbus; from gi.events import GLibEventLoop; "
         "from gi.repository import GLib, GLibUnix",
     ], check=True)
+    if shutil.which("wl-paste") is None:
+        sys.exit("wl-paste not found; install wl-clipboard first.")
 
     python_argument = quote_exec_argument(sys.executable)
     script_argument = quote_exec_argument(script_path)

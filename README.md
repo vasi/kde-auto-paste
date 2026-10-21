@@ -23,6 +23,7 @@ Requirements:
 
 * KDE Plasma on Wayland
 * dbus-python and PyGObject. These are already installed on most distros.
+* wl-clipboard, used to check that your selection reached the clipboard before pasting.
 
 Notes:
 
