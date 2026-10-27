@@ -22,7 +22,7 @@ from support.keyboard_portal import KeyboardPortal
 from support.kwin_scripts import KWinScripts
 
 
-FOCUS_SETTLE_SECONDS = 0.050
+FOCUS_SETTLE_SECONDS = 0.100
 KEY_INTERVAL_SECONDS = 0.030
 # XKB keysyms: Shift_L and Insert. Keep modifier changes separate.
 PASTE_KEY_EVENTS = ((0xFFE1, True), (0xFF63, True),
